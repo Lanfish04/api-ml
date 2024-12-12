@@ -26,18 +26,25 @@ def predict():
             "message": "Gambar harus ada"
         }), 400
 
-    # Simpan konten file ke variabel
-    img_content = img.read()
+    if not img.content_type.startswith('image/'):
+        return jsonify({
+            "status": False,
+            "message": "File bukan gambar"
+        }), 400
 
-    if len(img_content) > max_size:
+    if len(img.read()) > max_size:
         return jsonify({"status": False, "message": "Ukuran gambar terlalu besar"}), 400
 
     try:
-        # Baca file gambar dari stream
-        img_stream = io.BytesIO(img_content)
+        # Reset posisi stream setelah membaca ukuran
+        img.seek(0)
         
-        # Muat gambar dari stream dan ubah ukurannya
-        img_path = load_img(img_stream, target_size=(160, 160))
+        # Baca file gambar ke dalam stream
+        img_stream = io.BytesIO(img.read())
+
+        # Pastikan ukuran input cocok dengan model
+        input_shape = (160, 160)  # Ubah sesuai model Anda
+        img_path = load_img(img_stream, target_size=input_shape)
 
         # Konversi gambar ke array
         img_array = img_to_array(img_path)
@@ -47,6 +54,9 @@ def predict():
 
         # Tambahkan dimensi batch
         img_array = np.expand_dims(img_array, axis=0)
+
+        # Debugging ukuran input
+        print(f"Input shape before prediction: {img_array.shape}")
 
         # Prediksi dengan model
         prediction = model.predict(img_array)
@@ -59,16 +69,10 @@ def predict():
                 "message": "Produk ini Segar!",
                 "probability": float(prediction[0][0])
             })
-        elif prediction[0][0] > threshold:
-            return jsonify({
-                "status": False,
-                "message": "Produk ini Tidak Segar!",
-                "probability": float(prediction[0][0])
-            })
         else:
             return jsonify({
                 "status": False,
-                "message": "Produk Tidak dikenali.",
+                "message": "Produk ini Tidak Segar!",
                 "probability": float(prediction[0][0])
             })
     except Exception as e:
@@ -76,6 +80,6 @@ def predict():
             "status": "error",
             "message": str(e)
         }), 500
-        
+
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=4500)
